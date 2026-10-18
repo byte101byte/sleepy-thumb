@@ -1,0 +1,16 @@
+{
+  "name": "Sleepy Thumb",
+  "short_name": "Sleepy Thumb",
+  "description": "One-handed baby sleep and diaper tracker. Data stays on this device.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#120d0a",
+  "theme_color": "#120d0a",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#120d0a">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sleepy Thumb">
+<meta name="description" content="One-handed baby sleep and diaper tracker. Data stays on this device.">
+<title>Sleepy Thumb</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #120d0a;
+    --panel: #1d1510;
+    --line: #33261c;
+    --text: #d9bfa3;
+    --muted: #9a8069;
+    --dim: #6f5a48;
+    --amber: #c98a4b;
+    --sleep-bg: #2b2134;   --sleep-fg: #cdb7d9;  --sleep-hi: #453358;
+    --wake-bg: #3a2614;    --wake-fg: #f0c48e;   --wake-hi: #6a4219;
+    --diaper-bg: #252a1c;  --diaper-fg: #c7cf9f; --diaper-hi: #3c4529;
+    --danger: #b5583f;
+    --radius: 22px;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-t: env(safe-area-inset-top, 0px);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior-y: none;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible {
+    outline: 3px solid var(--amber); outline-offset: 3px;
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  /* ---------- Main screen ---------- */
+  .screen {
+    min-height: 100vh; min-height: 100dvh;
+    display: flex; flex-direction: column;
+    padding: calc(10px + var(--safe-t)) 12px calc(12px + var(--safe-b));
+    gap: 10px;
+  }
+  header.top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  header.top h1 { font-size: 15px; font-weight: 600; margin: 0; color: var(--muted); letter-spacing: .02em; }
+  .small-btn {
+    min-height: 44px; min-width: 44px; padding: 8px 14px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    color: var(--muted); font-size: 15px;
+  }
+  .small-btn:disabled { opacity: .4; cursor: default; }
+
+  .status {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 16px; text-align: center;
+  }
+  .status .state { font-size: 15px; color: var(--muted); margin: 0; }
+  .status .timer { font-size: clamp(30px, 9vw, 44px); font-weight: 700; margin: 2px 0 0; font-variant-numeric: tabular-nums; color: var(--text); }
+  body.asleep .status .timer { color: var(--sleep-fg); }
+  .stats { display: flex; justify-content: center; gap: 18px; margin-top: 8px; font-size: 15px; color: var(--muted); flex-wrap: wrap; }
+  .stats b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  .pad { flex: 1 1 auto; min-height: 62vh; min-height: 62dvh; display: flex; flex-direction: column; gap: 12px; position: relative; }
+  .big {
+    flex: 1 1 0; min-height: 96px; width: 100%;
+    border-radius: var(--radius); border: 2px solid transparent;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    font-size: clamp(30px, 9vw, 40px); font-weight: 700; letter-spacing: .01em;
+    transition: flex-grow .25s ease, background-color .25s ease, opacity .25s ease, transform .08s ease;
+    touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  }
+  .big:active { transform: scale(.985); }
+  .big .sub { font-size: 16px; font-weight: 500; opacity: .85; }
+  .big .ico { font-size: .8em; line-height: 1; }
+  #btnSleep  { background: var(--sleep-bg);  color: var(--sleep-fg); }
+  #btnWake   { background: var(--wake-bg);   color: var(--wake-fg); }
+  #btnDiaper { background: var(--diaper-bg); color: var(--diaper-fg); flex-grow: .8; }
+  /* State emphasis: the button you most likely need next grows and brightens. */
+  body.asleep #btnWake  { flex-grow: 2.2; background: var(--wake-hi); border-color: var(--wake-fg); }
+  body.asleep #btnSleep { flex-grow: .6; opacity: .55; }
+  body.awake  #btnSleep { flex-grow: 1.8; background: var(--sleep-hi); border-color: var(--sleep-fg); }
+  body.awake  #btnWake  { flex-grow: .6; opacity: .55; }
+
+  /* Diaper follow-up overlay (covers the button pad) */
+  .diaper-pick {
+    position: absolute; inset: 0; z-index: 5;
+    background: var(--bg); border-radius: var(--radius);
+    display: none; flex-direction: column; gap: 12px;
+  }
+  .diaper-pick.open { display: flex; }
+  .diaper-pick p { margin: 0; text-align: center; font-size: 17px; color: var(--muted); }
+  .diaper-pick .choice { flex: 1 1 0; background: var(--diaper-bg); color: var(--diaper-fg); font-size: 34px; }
+  .diaper-pick .choice[aria-pressed="true"] { background: var(--diaper-hi); border-color: var(--diaper-fg); }
+  .countdown { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .countdown > i { display: block; height: 100%; width: 100%; background: var(--diaper-fg); transform-origin: left; }
+  .countdown.run > i { animation: shrink var(--cd, 5s) linear forwards; }
+  @keyframes shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+  /* ---------- Log ---------- */
+  .log { padding: 8px 12px calc(24px + var(--safe-b)); }
+  .log h2 { font-size: 17px; margin: 10px 4px; color: var(--muted); font-weight: 600; }
+  .log ol { list-style: none; margin: 0; padding: 0; }
+  .log li {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; min-height: 60px;
+    border-bottom: 1px solid var(--line);
+  }
+  .log li .t { font-variant-numeric: tabular-nums; min-width: 5.2em; color: var(--text); font-weight: 600; }
+  .log li .what { flex: 1; }
+  .log li .what small { display: block; color: var(--muted); font-size: 14px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .dot.sleep { background: var(--sleep-fg); } .dot.wake { background: var(--wake-fg); } .dot.diaper { background: var(--diaper-fg); }
+  .empty { color: var(--dim); padding: 12px 4px; }
+  .tools { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+  .privacy { color: var(--dim); font-size: 14px; margin: 16px 4px 0; }
+
+  /* ---------- Dialogs & toast ---------- */
+  dialog {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 18px; width: min(92vw, 420px);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.7); }
+  dialog h3 { margin: 0 0 10px; font-size: 20px; }
+  dialog p { margin: 0 0 14px; color: var(--muted); }
+  dialog label { display: block; margin: 10px 0 4px; color: var(--muted); font-size: 15px; }
+  dialog input, dialog select {
+    width: 100%; min-height: 52px; font: inherit; font-size: 18px;
+    background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px;
+  }
+  .row { display: flex; gap: 10px; margin-top: 16px; }
+  .row button { flex: 1; min-height: 56px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg); font-size: 18px; }
+  .row .primary { background: var(--wake-hi); color: var(--wake-fg); border-color: transparent; font-weight: 700; }
+  .row .danger { background: #3a1a12; color: #f0a48e; border-color: transparent; }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(18px + var(--safe-b)); transform: translateX(-50%);
+    background: #2a1e16; color: var(--text); border: 1px solid var(--line);
+    padding: 12px 18px; border-radius: 14px; font-size: 16px; z-index: 50;
+    opacity: 0; pointer-events: none; transition: opacity .2s ease; max-width: 90vw; text-align: center;
+  }
+  .toast.show { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+    .big:active { transform: none; }
+  }
+  @media (min-width: 700px) { .screen, .log { max-width: 560px; margin: 0 auto; } }
+</style>
+</head>
+<body class="awake">
+<main class="screen" aria-labelledby="appTitle">
+  <header class="top">
+    <h1 id="appTitle">Sleepy Thumb</h1>
+    <button type="button" class="small-btn" id="btnUndo" aria-label="Undo last entry" disabled>↶ Undo</button>
+  </header>
+
+  <section class="status" aria-label="Current status">
+    <p class="state" id="stateLabel">Baby is awake</p>
+    <p class="timer" id="timer" aria-live="off">—</p>
+    <div class="stats">
+      <span>Sleep today <b id="sleepToday">0m</b></span>
+      <span>Diapers today <b id="diapersToday">0</b></span>
+    </div>
+  </section>
+
+  <section class="pad" aria-label="Log an event">
+    <button type="button" class="big" id="btnSleep" aria-describedby="sleepSub">
+      <span class="ico" aria-hidden="true">☾</span><span>Asleep</span><span class="sub" id="sleepSub">Tap when Baby falls asleep</span>
+    </button>
+    <button type="button" class="big" id="btnWake" aria-describedby="wakeSub">
+      <span class="ico" aria-hidden="true">☀</span><span>Awake</span><span class="sub" id="wakeSub">Tap when Baby wakes up</span>
+    </button>
+    <button type="button" class="big" id="btnDiaper" aria-describedby="diaperSub">
+      <span>Diaper</span><span class="sub" id="diaperSub">Logs a change</span>
+    </button>
+
+    <div class="diaper-pick" id="diaperPick" role="group" aria-labelledby="diaperPickLabel">
+      <p id="diaperPickLabel">Diaper logged. What kind? <span id="diaperCountdownText">(saves as wet in 5s)</span></p>
+      <div class="countdown" id="countdown" aria-hidden="true"><i></i></div>
+      <button type="button" class="big choice" data-kind="wet" aria-pressed="true">Wet</button>
+      <button type="button" class="big choice" data-kind="dirty" aria-pressed="false">Dirty</button>
+      <button type="button" class="big choice" data-kind="both" aria-pressed="false">Both</button>
+    </div>
+  </section>
+</main>
+
+<section class="log" aria-labelledby="logTitle">
+  <h2 id="logTitle">Today's log</h2>
+  <ol id="logList"></ol>
+  <p class="empty" id="logEmpty">Nothing logged yet today.</p>
+  <div class="tools">
+    <button type="button" class="small-btn" id="btnExportJson">Export JSON</button>
+    <button type="button" class="small-btn" id="btnExportCsv">Export CSV</button>
+    <button type="button" class="small-btn" id="btnImport">Import JSON</button>
+    <input type="file" id="importFile" accept="application/json,.json" class="sr-only" tabindex="-1" aria-hidden="true">
+  </div>
+  <p class="privacy">Private by design: everything is stored only in this browser on this device. Nothing is sent anywhere. Export now and then for a backup.</p>
+</section>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="dlgConfirm" aria-labelledby="confirmTitle" aria-describedby="confirmMsg">
+  <h3 id="confirmTitle">Undo?</h3>
+  <p id="confirmMsg"></p>
+  <div class="row">
+    <button type="button" id="confirmNo">Cancel</button>
+    <button type="button" id="confirmYes" class="primary">Yes</button>
+  </div>
+</dialog>
+
+<dialog id="dlgEdit" aria-labelledby="editTitle">
+  <h3 id="editTitle">Edit entry</h3>
+  <label for="editType">Type</label>
+  <select id="editType">
+    <option value="sleep">Asleep</option>
+    <option value="wake">Awake</option>
+    <option value="diaper">Diaper</option>
+  </select>
+  <div id="editKindWrap">
+    <label for="editKind">Diaper kind</label>
+    <select id="editKind">
+      <option value="wet">Wet</option>
+      <option value="dirty">Dirty</option>
+      <option value="both">Both</option>
+    </select>
+  </div>
+  <label for="editTime">Time</label>
+  <input type="datetime-local" id="editTime" step="60">
+  <div class="row">
+    <button type="button" id="editDelete" class="danger">Delete</button>
+    <button type="button" id="editCancel">Cancel</button>
+    <button type="button" id="editSave" class="primary">Save</button>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  'use strict';
+  const KEY = 'sleepyThumb.v1';
+  const DIAPER_DELAY = 5000;
+  const LABEL = { sleep: 'Asleep', wake: 'Awake', diaper: 'Diaper' };
+  const KINDS = ['wet', 'dirty', 'both'];
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- storage ----------
+  // events: [{ id, type: 'sleep'|'wake'|'diaper', t: epoch ms, kind?: 'wet'|'dirty'|'both' }]
+  // Stored in insertion order (so Undo removes the last *added* entry); sorted by time for display/math.
+  let events = [];
+  let storageOk = true;
+
+  function validEvent(e) {
+    return e && typeof e === 'object' && LABEL[e.type] && Number.isFinite(e.t) &&
+      (e.type !== 'diaper' || KINDS.includes(e.kind));
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return [];
+      const data = JSON.parse(raw);
+      const list = Array.isArray(data) ? data : (data && data.events) || [];
+      return list.filter(validEvent);
+    } catch (err) {
+      storageOk = false;
+      return [];
+    }
+  }
+  function save() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ version: 1, events }));
+      storageOk = true;
+    } catch (err) {
+      storageOk = false;
+      toast('Could not save. Storage may be full or disabled.');
+    }
+  }
+  function newId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+  const sorted = () => events.slice().sort((a, b) => a.t - b.t);
+
+  // ---------- derived state ----------
+  function lastSleepWake() {
+    const s = sorted();
+    for (let i = s.length - 1; i >= 0; i--) if (s[i].type !== 'diaper') return s[i];
+    return null;
+  }
+  function isAsleep() { const e = lastSleepWake(); return !!e && e.type === 'sleep'; }
+
+  // Pair each sleep with the next wake. Repeated sleeps keep the earliest start; stray wakes are ignored.
+  // An open session (no wake yet) runs until "now".
+  function sessions(now) {
+    const out = [];
+    let start = null;
+    for (const e of sorted()) {
+      if (e.type === 'sleep') { if (start === null) start = e.t; }
+      else if (e.type === 'wake' && start !== null) { out.push([start, Math.max(start, e.t)]); start = null; }
+    }
+    if (start !== null) out.push([start, Math.max(start, now)]);
+    return out;
+  }
+  function startOfDay(ms) { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); }
+  function startOfNextDay(ms) { const d = new Date(startOfDay(ms)); d.setDate(d.getDate() + 1); return d.getTime(); }
+
+  // Sleep within [local midnight today, now]; sessions crossing midnight only count the part after midnight.
+  function sleepToday(now) {
+    const from = startOfDay(now);
+    let total = 0;
+    for (const [a, b] of sessions(now)) {
+      const s = Math.max(a, from), e = Math.min(b, now);
+      if (e > s) total += e - s;
+    }
+    return total;
+  }
+  function diapersToday(now) {
+    const from = startOfDay(now), to = startOfNextDay(now);
+    return events.filter((e) => e.type === 'diaper' && e.t >= from && e.t < to).length;
+  }
+
+  // ---------- formatting ----------
+  function fmtDur(ms) {
+    const mins = Math.max(0, Math.floor(ms / 60000));
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
+  }
+  function fmtDurLong(ms) {
+    const mins = Math.max(0, Math.floor(ms / 60000));
+    const h = Math.floor(mins / 60), m = mins % 60;
+    const parts = [];
+    if (h) parts.push(`${h} hour${h === 1 ? '' : 's'}`);
+    parts.push(`${m} minute${m === 1 ? '' : 's'}`);
+    return parts.join(' ');
+  }
+  const fmtTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  function describe(e) {
+    return e.type === 'diaper' ? `Diaper (${e.kind})` : LABEL[e.type];
+  }
+  function toLocalInput(ms) {
+    const d = new Date(ms), p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+
+  // ---------- render ----------
+  let lastSig = null;
+  function render() {
+    const now = Date.now();
+    const asleep = isAsleep();
+    const last = lastSleepWake();
+    document.body.classList.toggle('asleep', asleep);
+    document.body.classList.toggle('awake', !asleep);
+
+    if (asleep) {
+      $('stateLabel').textContent = 'Baby is asleep';
+      $('timer').textContent = `asleep for ${fmtDur(now - last.t)}`;
+      $('wakeSub').textContent = `Asleep since ${fmtTime(last.t)} · tap when Baby wakes`;
+      $('sleepSub').textContent = 'Already asleep';
+      $('btnWake').setAttribute('aria-label', `Awake. Baby has been asleep for ${fmtDurLong(now - last.t)}`);
+      $('btnSleep').setAttribute('aria-label', 'Asleep (already logged)');
+    } else {
+      $('stateLabel').textContent = 'Baby is awake';
+      $('timer').textContent = last ? `awake for ${fmtDur(now - last.t)}` : 'Ready';
+      $('sleepSub').textContent = 'Tap when Baby falls asleep';
+      $('wakeSub').textContent = last ? 'Already awake' : 'Tap when Baby wakes up';
+      $('btnSleep').setAttribute('aria-label', 'Asleep. Tap when Baby falls asleep');
+      $('btnWake').setAttribute('aria-label', 'Awake');
+    }
+    $('sleepToday').textContent = fmtDur(sleepToday(now));
+    $('diapersToday').textContent = String(diapersToday(now));
+    $('btnUndo').disabled = events.length === 0;
+
+    // Today's log, newest first
+    const from = startOfDay(now), to = startOfNextDay(now);
+    const today = sorted().filter((e) => e.t >= from && e.t < to).reverse();
+    const list = $('logList');
+    // Only rebuild when something changed (keeps focus stable during the periodic timer refresh).
+    const sig = from + '|' + (isAsleep() ? 1 : 0) + '|' + today.map((e) => e.id + e.type + e.t + (e.kind || '')).join(',');
+    if (sig === lastSig) { $('logEmpty').hidden = today.length > 0; return; }
+    lastSig = sig;
+    list.textContent = '';
+    for (const e of today) {
+      const li = document.createElement('li');
+      const dot = document.createElement('span'); dot.className = `dot ${e.type}`; dot.setAttribute('aria-hidden', 'true');
+      const t = document.createElement('span'); t.className = 't'; t.textContent = fmtTime(e.t);
+      const what = document.createElement('span'); what.className = 'what'; what.textContent = describe(e);
+      if (e.type === 'wake') {
+        const sess = sessions(now).find(([, b]) => b === e.t);
+        if (sess) { const s = document.createElement('small'); s.textContent = `slept ${fmtDur(sess[1] - sess[0])}`; what.appendChild(s); }
+      }
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'small-btn'; btn.textContent = 'Edit';
+      btn.setAttribute('aria-label', `Edit ${describe(e)} at ${fmtTime(e.t)}`);
+      btn.addEventListener('click', () => openEdit(e.id));
+      li.append(dot, t, what, btn);
+      list.appendChild(li);
+    }
+    $('logEmpty').hidden = today.length > 0;
+  }
+
+  // ---------- feedback ----------
+  let toastTimer = null;
+  function toast(msg) {
+    const el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+  }
+  function buzz() { try { navigator.vibrate && navigator.vibrate(25); } catch (_) {} }
+
+  // ---------- actions ----------
+  function add(type, extra) {
+    const e = Object.assign({ id: newId(), type, t: Date.now() }, extra || {});
+    events.push(e);
+    save();
+    render();
+    buzz();
+    return e;
+  }
+  $('btnSleep').addEventListener('click', () => {
+    if (isAsleep()) { toast('Baby is already asleep'); return; }
+    add('sleep');
+    toast('Asleep logged');
+  });
+  $('btnWake').addEventListener('click', () => {
+    if (!isAsleep()) {
+      toast(lastSleepWake() ? 'Baby is already awake' : 'Tap Asleep first when Baby falls asleep');
+      return;
+    }
+    const start = lastSleepWake().t;
+    add('wake');
+    toast(`Awake logged · slept ${fmtDur(Date.now() - start)}`);
+  });
+
+  // Diaper: log immediately as "wet", then offer a quick change of kind. Ignoring it keeps "wet".
+  let pickTimer = null, pickId = null;
+  const pick = $('diaperPick');
+  function closePick(msg) {
+    clearTimeout(pickTimer); pickTimer = null; pickId = null;
+    pick.classList.remove('open');
+    $('countdown').classList.remove('run');
+    if (msg) toast(msg);
+    $('btnDiaper').focus({ preventScroll: true });
+  }
+  $('btnDiaper').addEventListener('click', () => {
+    const e = add('diaper', { kind: 'wet' });
+    pickId = e.id;
+    pick.querySelectorAll('.choice').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kind === 'wet')));
+    pick.classList.add('open');
+    const cd = $('countdown');
+    cd.style.setProperty('--cd', DIAPER_DELAY + 'ms');
+    cd.classList.remove('run'); void cd.offsetWidth; cd.classList.add('run');
+    $('diaperCountdownText').textContent = `(saves as wet in ${DIAPER_DELAY / 1000}s)`;
+    clearTimeout(pickTimer);
+    pickTimer = setTimeout(() => closePick('Diaper (wet) logged'), DIAPER_DELAY);
+    pick.querySelector('.choice[data-kind="wet"]').focus({ preventScroll: true });
+  });
+  pick.querySelectorAll('.choice').forEach((b) => b.addEventListener('click', () => {
+    const e = events.find((x) => x.id === pickId);
+    if (e) { e.kind = b.dataset.kind; save(); render(); buzz(); }
+    closePick(`Diaper (${b.dataset.kind}) logged`);
+  }));
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && pick.classList.contains('open')) closePick('Diaper (wet) logged');
+  });
+
+  // Confirm dialog helper
+  function confirmBox(title, msg, yesLabel) {
+    return new Promise((resolve) => {
+      const d = $('dlgConfirm');
+      $('confirmTitle').textContent = title;
+      $('confirmMsg').textContent = msg;
+      $('confirmYes').textContent = yesLabel || 'Yes';
+      const done = (v) => { cleanup(); if (d.open) d.close(); resolve(v); };
+      const yes = () => done(true), no = () => done(false), cancel = (ev) => { ev.preventDefault(); done(false); };
+      function cleanup() {
+        $('confirmYes').removeEventListener('click', yes);
+        $('confirmNo').removeEventListener('click', no);
+        d.removeEventListener('cancel', cancel);
+      }
+      $('confirmYes').addEventListener('click', yes);
+      $('confirmNo').addEventListener('click', no);
+      d.addEventListener('cancel', cancel);
+      d.showModal();
+      $('confirmNo').focus();
+    });
+  }
+
+  $('btnUndo').addEventListener('click', async () => {
+    if (!events.length) return;
+    const last = events[events.length - 1];
+    const ok = await confirmBox('Undo last entry?', `Remove "${describe(last)}" at ${fmtTime(last.t)}?`, 'Undo');
+    if (!ok) return;
+    if (pickId === last.id) closePick();
+    events.pop();
+    save(); render();
+    toast('Removed ' + describe(last));
+  });
+
+  // Edit / delete
+  let editId = null;
+  function syncKindVisibility() { $('editKindWrap').hidden = $('editType').value !== 'diaper'; }
+  $('editType').addEventListener('change', syncKindVisibility);
+  function openEdit(id) {
+    const e = events.find((x) => x.id === id);
+    if (!e) return;
+    editId = id;
+    $('editType').value = e.type;
+    $('editKind').value = e.kind || 'wet';
+    $('editTime').value = toLocalInput(e.t);
+    $('editTime').max = toLocalInput(Date.now());
+    syncKindVisibility();
+    $('dlgEdit').showModal();
+  }
+  $('editCancel').addEventListener('click', () => $('dlgEdit').close());
+  $('editSave').addEventListener('click', () => {
+    const e = events.find((x) => x.id === editId);
+    if (!e) { $('dlgEdit').close(); return; }
+    const t = new Date($('editTime').value).getTime();
+    if (!Number.isFinite(t)) { toast('Please pick a valid time'); return; }
+    if (t > Date.now() + 60000) { toast('Time cannot be in the future'); return; }
+    e.type = $('editType').value;
+    e.t = t;
+    if (e.type === 'diaper') e.kind = $('editKind').value; else delete e.kind;
+    save(); $('dlgEdit').close(); render();
+    toast('Entry updated');
+  });
+  $('editDelete').addEventListener('click', async () => {
+    const e = events.find((x) => x.id === editId);
+    $('dlgEdit').close();
+    if (!e) return;
+    const ok = await confirmBox('Delete entry?', `Delete "${describe(e)}" at ${fmtTime(e.t)}?`, 'Delete');
+    if (!ok) return;
+    events = events.filter((x) => x.id !== e.id);
+    save(); render();
+    toast('Entry deleted');
+  });
+
+  // Export / import
+  function download(name, text, mime) {
+    const url = URL.createObjectURL(new Blob([text], { type: mime }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  const stamp = () => toLocalInput(Date.now()).replace(/[:T]/g, '-');
+  $('btnExportJson').addEventListener('click', () => {
+    download(`sleepy-thumb-${stamp()}.json`, JSON.stringify({ app: 'sleepy-thumb', version: 1, exportedAt: new Date().toISOString(), events: sorted() }, null, 2), 'application/json');
+  });
+  $('btnExportCsv').addEventListener('click', () => {
+    const rows = [['type', 'kind', 'time_iso', 'time_local']];
+    for (const e of sorted()) rows.push([e.type, e.kind || '', new Date(e.t).toISOString(), new Date(e.t).toLocaleString()]);
+    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n') + '\r\n';
+    download(`sleepy-thumb-${stamp()}.csv`, csv, 'text/csv');
+  });
+  $('btnImport').addEventListener('click', () => $('importFile').click());
+  $('importFile').addEventListener('change', async (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    ev.target.value = '';
+    if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      const list = (Array.isArray(data) ? data : data.events || []).filter(validEvent)
+        .map((e) => ({ id: String(e.id || newId()), type: e.type, t: e.t, ...(e.type === 'diaper' ? { kind: e.kind } : {}) }));
+      if (!list.length) { toast('No valid entries in that file'); return; }
+      const ok = await confirmBox('Replace data?', `Replace all ${events.length} current entries with ${list.length} from the file?`, 'Replace');
+      if (!ok) return;
+      events = list.sort((a, b) => a.t - b.t);
+      save(); render();
+      toast(`Imported ${list.length} entries`);
+    } catch (_) {
+      toast('Could not read that file');
+    }
+  });
+
+  // Keep in sync with other tabs and refresh timers.
+  window.addEventListener('storage', (ev) => { if (ev.key === KEY) { events = load(); render(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+  setInterval(render, 15000);
+
+  events = load();
+  render();
+  if (!storageOk) toast('Saved data could not be read; starting fresh.');
+
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+})();
+</script>
+</body>
+</html>
